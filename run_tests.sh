@@ -1,0 +1,1 @@
+.venv/bin/pytest -s tests.py
