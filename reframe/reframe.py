@@ -218,7 +218,7 @@ def _run_analysis(df: pd.DataFrame, **kwargs) -> ReframeResult:
     if exclude_issues:
         include_rows = [issue for issue in result.issues_per_column_count.index if
                         all(exc.lower() not in issue.lower() for exc in exclude_issues)]
-        result.issues_per_column_count = result.issues_per_column_count.loc[include_rows,:]
+        result.issues_per_column_count = result.issues_per_column_count.loc[include_rows, :]
 
     result.issues_per_column = _get_issues_per_column(
         df, result.issues_per_column_count
@@ -284,29 +284,30 @@ def prepare_report(result):
     return result
 
 
-def print_report(result):
-    hi = result.report.has_issues
+def report_to_string(report):
+    report_str = ""
+    hi = report.has_issues
 
-    print("###################################")
-    print("### RE(VIEW) (DATA)FRAME REPORT ###")
-    print("###################################")
-    print()
-
-    print("### Possible issues in dataframe: " + hi)
-    print()
+    report_str += "### Possible issues in dataframe: " + hi
+    report_str += "\n\n"
 
     if not hi:
         return
 
-    print(result.report.issues_per_column)
-    print()
+    report_str += report.issues_per_column
+    report_str += "\n\n"
 
-    print(result.report.issues_per_column_count)
-    print()
+    report_str += report.issues_per_column_count
+    report_str += "\n\n"
 
-    print(result.report.issues_per_row)
-    print()
+    report_str += report.issues_per_row
+    report_str += "\n\n"
 
+    return report_str
+
+
+def print_report(result):
+    print(report_to_string(result.report))
     return
 
 
