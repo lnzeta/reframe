@@ -1,5 +1,7 @@
-import pytest
-from reframe import *
+import numpy as np
+import pandas as pd
+
+from reframe.reframe import run_analysis
 
 
 class TestReframe:

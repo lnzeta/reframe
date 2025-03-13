@@ -3,7 +3,7 @@ import pandas as pd
 
 # Example usage
 def _main():
-    from reframe import run_analysis
+    from reframe.reframe import run_analysis
 
     df = pd.DataFrame(
         {
