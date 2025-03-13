@@ -42,6 +42,15 @@ class ReframeResult:
         self.issues_per_row = pd.Series()
         self.issues_per_column_count = pd.DataFrame()
         self.issues_per_column = pd.DataFrame()
+        self.report = ReframeResultReport()
+
+
+class ReframeResultReport:
+    def __init__(self):
+        self.has_issues = "No"
+        self.issues_per_row = ""
+        self.issues_per_column_count = ""
+        self.issues_per_column = ""
 
 
 # Count of outliers according to the box plot method
@@ -88,7 +97,7 @@ def _analyze_columns(
     # Count duplicates (for all columns)
     result_df["count_duplicate_values"] = df.apply(
         lambda x: x.duplicated(), axis=axis
-    ).sum(axis=axis)
+    ).astype(int).sum(axis=axis)
 
     result_df["has_multiple_datatypes"] = df.map(type).nunique() - 1
     result_df["is_object_datatype"] = df.dtypes.apply(lambda x: 1 if x == object else 0)
@@ -159,6 +168,7 @@ def _analyze_columns(
             - 1,  # Exclude self-correlation
             0,
         )
+
     return result_df.T
 
 
@@ -204,6 +214,12 @@ def _run_analysis(df: pd.DataFrame, **kwargs) -> ReframeResult:
     result.issues_per_column_count = _analyze_columns(df, **kwargs)
     result.issues_per_column_count.index.name = "Issues per column (count)"
 
+    exclude_issues = kwargs.get("exclude_issues", ())
+    if exclude_issues:
+        include_rows = [issue for issue in result.issues_per_column_count.index if
+                        all(exc.lower() not in issue.lower() for exc in exclude_issues)]
+        result.issues_per_column_count = result.issues_per_column_count.loc[include_rows,:]
+
     result.issues_per_column = _get_issues_per_column(
         df, result.issues_per_column_count
     )
@@ -230,6 +246,70 @@ def _cap_data(df):
     return df
 
 
+def prepare_report(result):
+    from tabulate import tabulate
+    hi = result.has_issues
+    result.report.has_issues = "Yes" if hi else "No"
+
+    if not hi:
+        return result
+
+    tablefmt = "simple"
+
+    _df = _prettify_index(result.issues_per_column)
+    result.report.issues_per_column = (
+        tabulate(
+            _df,
+            headers=[result.issues_per_column.index.name] + list(_df.columns),
+            tablefmt=tablefmt,
+            colalign=["left"]
+                     + ["center"] * (len(result.issues_per_column_count.columns) - 1),
+            rowalign="center",
+        )
+    )
+
+    result.report.issues_per_column_count = (
+        tabulate(
+            _prettify_index(result.issues_per_column_count).fillna(""),
+            headers="keys",
+            tablefmt=tablefmt,
+            colalign=["left"]
+                     + ["center"] * (len(result.issues_per_column_count.columns) - 1),
+            rowalign="center",
+        )
+    )
+
+    result.report.issues_per_row = (tabulate(_prettify_index(result.issues_per_row), tablefmt=tablefmt,
+                                             headers=[result.issues_per_row.name, ""]))
+    return result
+
+
+def print_report(result):
+    hi = result.report.has_issues
+
+    print("###################################")
+    print("### RE(VIEW) (DATA)FRAME REPORT ###")
+    print("###################################")
+    print()
+
+    print("### Possible issues in dataframe: " + hi)
+    print()
+
+    if not hi:
+        return
+
+    print(result.report.issues_per_column)
+    print()
+
+    print(result.report.issues_per_column_count)
+    print()
+
+    print(result.report.issues_per_row)
+    print()
+
+    return
+
+
 def run_analysis(
         df: pd.DataFrame,
         small_threshold=1e-9,
@@ -239,10 +319,10 @@ def run_analysis(
         lower_quantile=0.25,
         upper_quantile=0.75,
         max_corr=0.5,
+        exclude_issues=(),
         print_to_console=True,
 ) -> ReframeResult:
     import warnings
-    from tabulate import tabulate
 
     if not print_to_console:
         _disable_print()
@@ -256,48 +336,10 @@ def run_analysis(
         result = _run_analysis(**locals())
         hi = _has_issues(result)
         result.has_issues = hi
-        yesno = "Yes" if hi else "No"
 
-        print("###################################")
-        print("### RE(VIEW) (DATA)FRAME REPORT ###")
-        print("###################################")
-        print()
+        result = prepare_report(result)
 
-        print("### Possible issues in dataframe: " + yesno)
-        print()
-
-        if not hi:
-            return result
-
-        tablefmt = "simple"
-
-        _df = _prettify_index(result.issues_per_column)
-        print(
-            tabulate(
-                _df,
-                headers=[result.issues_per_column.index.name] + list(_df.columns),
-                tablefmt=tablefmt,
-                colalign=["left"]
-                         + ["center"] * (len(result.issues_per_column_count.columns) - 1),
-                rowalign="center",
-            )
-        )
-        print()
-
-        print(
-            tabulate(
-                _prettify_index(result.issues_per_column_count).fillna(""),
-                headers="keys",
-                tablefmt=tablefmt,
-                colalign=["left"]
-                         + ["center"] * (len(result.issues_per_column_count.columns) - 1),
-                rowalign="center",
-            )
-        )
-        print()
-
-        print(tabulate(_prettify_index(result.issues_per_row), tablefmt=tablefmt,
-                       headers=[result.issues_per_row.name, ""]))
-        print()
+        if print_to_console:
+            print_report(result)
 
         return result
